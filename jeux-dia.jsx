@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
+import { createClient } from "@supabase/supabase-js";
+
 const supabase = createClient(
-  'https://tktdojnicxxtszqnedsz.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrdGRvam5pY3h4dHN6cW5lZHN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzNzA4NTksImV4cCI6MjA4Njk0Njg1OX0.kBFvoEtGKXWPii4jueNjxA2pxAT0LQt2-A5xDbDXr1w'
+  "https://tktdojnicxxtszqnedsz.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrdGRvam5pY3h4dHN6cW5lZHN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzNzA4NTksImV4cCI6MjA4Njk0Njg1OX0.kBFvoEtGKXWPii4jueNjxA2pxAT0LQt2-A5xDbDXr1w"
+);
 // ─── Fonts via Google ────────────────────────────────────────────────────────
 const GlobalStyle = () => (
   <style>{`
@@ -189,17 +192,19 @@ const GlobalStyle = () => (
 
 // ─── Utility & Mock Data ─────────────────────────────────────────────────────
 
-const TIME_SLOTS = [
-  "09:00","09:20","09:40","10:00","10:20","10:40","11:00","11:20","11:40",
-  "12:00","12:20","12:40","13:00","13:20","13:40","14:00","14:20","14:40",
-  "15:00","15:20","15:40","16:00","16:20","16:40","17:00","17:20","17:40",
-  "18:00","18:20","18:40","19:00","19:20","19:40","20:00"
-];
+const TIME_SLOTS = Array.from({ length: 145 }, (_, index) => {
+  const minutesFromStart = index * 5;
+  const h = 9 + Math.floor(minutesFromStart / 60);
+  const m = minutesFromStart % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+});
 
 const DURATIONS = [
-  { label: "15 min", minutes: 15, slots: 1, price: 1000 },
-  { label: "1 heure", minutes: 60, slots: 4, price: 3000 }
+  { label: "15 min", minutes: 15, slots: 3, price: 1000 },
+  { label: "1 heure", minutes: 60, slots: 12, price: 3000 }
 ];
+
+const CLEANING_BUFFER_SLOTS = 1;
 
 const DAYS = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
 const MONTHS = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
@@ -231,16 +236,41 @@ function slotKey(date, time) {
   return `${date.toISOString().split("T")[0]}_${time}`;
 }
 
+async function sendBookingNotification(payload) {
+  try {
+    await fetch("/api/webhooks/booking-confirmed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    console.warn("Webhook notification failed", error);
+  }
+}
+
 // ─── Initial bookings mock data ──────────────────────────────────────────────
 const TODAY = new Date();
 const todayStr = TODAY.toISOString().split("T")[0];
 
 const INITIAL_BOOKINGS = [
   { id: "b1", slotKey: `${todayStr}_10:00`, dateStr: todayStr, time: "10:00", duration: "1 heure", name: "Koffi A.", phone: "+228 90 11 22 33", type: "member", status: "confirmed", amount: 0 },
-  { id: "b2", slotKey: `${todayStr}_10:20`, dateStr: todayStr, time: "10:20", duration: "buffer", name: null, type: "buffer", status: "buffer", amount: 0 },
-  { id: "b3", slotKey: `${todayStr}_10:40`, dateStr: todayStr, time: "10:40", duration: "buffer", name: null, type: "buffer", status: "buffer", amount: 0 },
-  { id: "b4", slotKey: `${todayStr}_13:00`, dateStr: todayStr, time: "13:00", duration: "15 min", name: "Ami D.", phone: "+228 91 44 55 66", type: "casual", status: "confirmed", amount: 1000 },
-  { id: "b5", slotKey: `${todayStr}_14:40`, dateStr: todayStr, time: "14:40", duration: null, name: null, type: "blocked", status: "blocked", amount: 0, reason: "Maintenance" },
+  { id: "b2", slotKey: `${todayStr}_10:05`, dateStr: todayStr, time: "10:05", duration: "session", name: null, type: "session", status: "session", amount: 0 },
+  { id: "b3", slotKey: `${todayStr}_10:10`, dateStr: todayStr, time: "10:10", duration: "session", name: null, type: "session", status: "session", amount: 0 },
+  { id: "b4", slotKey: `${todayStr}_10:15`, dateStr: todayStr, time: "10:15", duration: "session", name: null, type: "session", status: "session", amount: 0 },
+  { id: "b5", slotKey: `${todayStr}_10:20`, dateStr: todayStr, time: "10:20", duration: "session", name: null, type: "session", status: "session", amount: 0 },
+  { id: "b6", slotKey: `${todayStr}_10:25`, dateStr: todayStr, time: "10:25", duration: "session", name: null, type: "session", status: "session", amount: 0 },
+  { id: "b7", slotKey: `${todayStr}_10:30`, dateStr: todayStr, time: "10:30", duration: "session", name: null, type: "session", status: "session", amount: 0 },
+  { id: "b8", slotKey: `${todayStr}_10:35`, dateStr: todayStr, time: "10:35", duration: "session", name: null, type: "session", status: "session", amount: 0 },
+  { id: "b9", slotKey: `${todayStr}_10:40`, dateStr: todayStr, time: "10:40", duration: "session", name: null, type: "session", status: "session", amount: 0 },
+  { id: "b10", slotKey: `${todayStr}_10:45`, dateStr: todayStr, time: "10:45", duration: "session", name: null, type: "session", status: "session", amount: 0 },
+  { id: "b11", slotKey: `${todayStr}_10:50`, dateStr: todayStr, time: "10:50", duration: "session", name: null, type: "session", status: "session", amount: 0 },
+  { id: "b12", slotKey: `${todayStr}_10:55`, dateStr: todayStr, time: "10:55", duration: "session", name: null, type: "session", status: "session", amount: 0 },
+  { id: "b13", slotKey: `${todayStr}_11:00`, dateStr: todayStr, time: "11:00", duration: "buffer", name: null, type: "buffer", status: "buffer", amount: 0 },
+  { id: "b14", slotKey: `${todayStr}_13:00`, dateStr: todayStr, time: "13:00", duration: "15 min", name: "Ami D.", phone: "+228 91 44 55 66", type: "casual", status: "confirmed", amount: 1000 },
+  { id: "b15", slotKey: `${todayStr}_13:05`, dateStr: todayStr, time: "13:05", duration: "session", name: null, type: "session", status: "session", amount: 0 },
+  { id: "b16", slotKey: `${todayStr}_13:10`, dateStr: todayStr, time: "13:10", duration: "session", name: null, type: "session", status: "session", amount: 0 },
+  { id: "b17", slotKey: `${todayStr}_13:15`, dateStr: todayStr, time: "13:15", duration: "buffer", name: null, type: "buffer", status: "buffer", amount: 0 },
+  { id: "b18", slotKey: `${todayStr}_14:40`, dateStr: todayStr, time: "14:40", duration: null, name: null, type: "blocked", status: "blocked", amount: 0, reason: "Maintenance" },
 ];
 
 // ─── Sub Components ──────────────────────────────────────────────────────────
@@ -784,7 +814,9 @@ function MembershipPage({ user, onActivate, onRenew }) {
 
 // ─── Admin Dashboard ──────────────────────────────────────────────────────────
 function AdminDashboard({ bookings, onUnblock }) {
-  const [tab, setTab] = useState("calendar");
+  const dailyRows = bookings.filter(
+    b => b.dateStr === todayStr && ["confirmed", "blocked", "buffer"].includes(b.status)
+  );
 
   const todayBookings = bookings.filter(b => b.dateStr === todayStr && b.status === "confirmed");
   const totalRevenue = bookings.filter(b => b.status === "confirmed").reduce((s, b) => s + (b.amount || 0), 0);
@@ -835,11 +867,11 @@ function AdminDashboard({ bookings, onUnblock }) {
         <h3 className="orbitron" style={{ fontSize: 13, marginBottom: 16, color: "var(--accent)" }}>
           RÉSERVATIONS DU JOUR — {todayStr}
         </h3>
-        {bookings.filter(b => b.dateStr === todayStr).length === 0 ? (
+        {dailyRows.length === 0 ? (
           <p style={{ color: "var(--muted)", fontSize: 13, textAlign: "center", padding: "20px 0" }}>Aucune réservation pour aujourd'hui</p>
         ) : (
           <div>
-            {bookings.filter(b => b.dateStr === todayStr).sort((a, b) => a.time.localeCompare(b.time)).map(b => (
+            {dailyRows.sort((a, b) => a.time.localeCompare(b.time)).map(b => (
               <div key={b.id || b.slotKey} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--border)" }}>
                 <span className="mono" style={{ fontSize: 14, color: "var(--accent)", minWidth: 50 }}>{b.time}</span>
                 <div style={{ flex: 1 }}>
@@ -934,6 +966,25 @@ export default function App() {
   const [toasts, setToasts] = useState([]);
   const [blockTarget, setBlockTarget] = useState(null);
 
+  useEffect(() => {
+    if (!user?.memberExpiry || user?.isAdmin) return;
+    const days = Math.max(0, Math.ceil((new Date(user.memberExpiry) - new Date()) / 86400000));
+    const nextStatus = days > 0 ? "active" : "expired";
+    if (user.daysLeft !== days || user.memberStatus !== nextStatus) {
+      setUser(u => ({ ...u, daysLeft: days, memberStatus: nextStatus }));
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("jeuxdia-bookings")
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => {})
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const addToast = useCallback((message, type = "success") => {
     const id = Date.now();
     setToasts(t => [...t, { id, message, type }]);
@@ -963,24 +1014,46 @@ export default function App() {
     addToast("Compte créé avec succès !", "success");
   };
 
-  const handleBook = (booking) => {
+  const handleBook = async (booking) => {
     const id = "b" + Date.now();
     const newBookings = [{ ...booking, id }];
-    // Add buffer slots
     if (booking.slots) {
       const idx = TIME_SLOTS.indexOf(booking.time);
+      for (let i = 1; i < booking.slots; i++) {
+        newBookings.push({
+          id: `${id}_session_${i}`,
+          slotKey: slotKey(new Date(booking.dateStr), TIME_SLOTS[idx + i]),
+          dateStr: booking.dateStr,
+          time: TIME_SLOTS[idx + i],
+          type: "session", status: "session", amount: 0
+        });
+      }
+
       const bufferIdx = idx + booking.slots;
       if (bufferIdx < TIME_SLOTS.length) {
-        newBookings.push({
-          id: id + "_buf1",
-          slotKey: slotKey(new Date(booking.dateStr), TIME_SLOTS[bufferIdx]),
-          dateStr: booking.dateStr,
-          time: TIME_SLOTS[bufferIdx],
-          type: "buffer", status: "buffer", amount: 0
-        });
+        for (let i = 0; i < CLEANING_BUFFER_SLOTS; i++) {
+          const time = TIME_SLOTS[bufferIdx + i];
+          if (!time) continue;
+          newBookings.push({
+            id: `${id}_buf_${i}`,
+            slotKey: slotKey(new Date(booking.dateStr), time),
+            dateStr: booking.dateStr,
+            time,
+            type: "buffer", status: "buffer", amount: 0
+          });
+        }
       }
     }
     setBookings(b => [...b, ...newBookings]);
+    await sendBookingNotification({
+      phone: booking.phone,
+      channel: "whatsapp_sms",
+      confirmCode: booking.confirmCode,
+      time: booking.time,
+      date: booking.dateStr,
+      amount: booking.amount,
+      membership: booking.type === "member",
+    });
     addToast(`Session réservée pour ${booking.time} ! Code: ${booking.confirmCode}`, "success");
   };
 
